@@ -122,8 +122,25 @@ def estimate_run_time_for_operation(
 ) -> List[dict[str, Any]]:
     md_file.new_header(level=1, title=opcode)
     opcode_df = gas_bench_df[gas_bench_df["test_opcode"] == opcode]
+    if opcode_df.empty:
+        return []
     groupby_cols = [col for col in group_by if opcode_df[col].nunique() > 1]
     out_list = []
+    # TODO(zkevm): temporary workaround until all opcodes/precompile have data
+    # for more than one EL-zkEVM. e.g. POINT_EVALUATION.
+    if not groupby_cols:
+        group_values = (opcode_df["client_name"].iloc[0],)
+        plot_label = opcode
+        _, features = prepare_non_simple_model_data(opcode_df, params)
+        if len(features) > 1:
+            out_dict = estimate_non_simple_model(
+                opcode_df, opcode, md_file, out_dir, params, group_by, group_values, plot_label
+            )
+        else:
+            out_dict = estimate_simple_model(
+                opcode_df, opcode, md_file, out_dir, group_by, group_values, plot_label
+            )
+        return [out_dict]
     last_values = [None] * len(groupby_cols)
     for group_values, op_df in opcode_df.groupby(groupby_cols, dropna=False):
         if not isinstance(group_values, tuple):
