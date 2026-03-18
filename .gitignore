@@ -212,3 +212,6 @@ __marimo__/
 secrets.json
 .DS_Store
 .vscode/
+
+zkevm/fixtures
+zkevm/runs

@@ -40,19 +40,23 @@ def extract_param_values(params_str: str, param_name: str):
 def get_current_gas_cost(opcode: str, param: str) -> int | None:
     """Map opcode and parameter to current gas cost from fusaka_dict"""
     fusaka_dict = get_fusaka_dict()
-    # Handle parameter-based costs
-    # 7904 repricings
-    if param == "num_rounds":
-        return fusaka_dict.get(f"{opcode}_ROUNDS", None)
-    elif param == "num_pairs":
-        return fusaka_dict.get(f"{opcode}_PAIRS", None)
-    elif param == "msg_size":
-        return fusaka_dict.get(f"{opcode}_WORD", None)
-    # For constant/main parameter, return the base cost
-    elif param == "constant":
+    if param == "constant":
         return fusaka_dict.get(opcode, None)
-    else:
-        return None
+
+    param_suffixes = {
+        "num_rounds": ["ROUNDS"],  # BLAKE2F
+        "num_pairs": ["PAIRS"],  # ECPAIRING, BLS12_PAIRING_CHECK
+        "msg_size": ["WORD"],  # KECCAK256, SHA2-256, RIPEMD-160, IDENTITY
+        "code_size": ["CODE_WORD"],  # CODECOPY
+        "mem_size": ["MEM_WORD"],  # CALLDATACOPY, RETURNDATACOPY, MCOPY, etc.
+        "k": ["K"],  # BLS12_G1MSM, BLS12_G2MSM
+        "mod": ["MOD"],  # MODEXP (placeholder for non-linear formula)
+    }
+    for suffix in param_suffixes.get(param, []):
+        key = f"{opcode}_{suffix}"
+        if key in fusaka_dict:
+            return fusaka_dict[key]
+    return None
 
 
 def _query_gas_bench(

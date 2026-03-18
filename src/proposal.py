@@ -475,26 +475,32 @@ def find_poor_fit_glue_opcodes(
 
 
 def find_missing_client_estimations(
-    results_df: pd.DataFrame, required_opcodes: List[str] = []
+    results_df: pd.DataFrame,
+    required_opcodes: List[str] = [],
+    all_clients: set = None,
 ) -> Dict[str, List[str]]:
     """Find opcodes that are missing estimations for some clients.
 
-    Checks against the expected set of 5 clients (geth, reth, nethermind,
-    besu, erigon) and returns which clients are missing per opcode.
+    Checks against the expected set of clients and returns which clients
+    are missing per opcode.
 
     Args:
         results_df: DataFrame with columns 'opcode' and 'client_name'.
         required_opcodes: If provided, opcodes in this list that are entirely
-            absent from results_df are included in the result with all 5
+            absent from results_df are included in the result with all
             clients listed as missing.
+        all_clients: Set of expected client names. Defaults to the 5 standard
+            EVM clients if not provided.
 
     Returns:
         Dict mapping opcode -> sorted list of missing client names.
-        Empty dict if all opcodes have all 5 clients.
+        Empty dict if all opcodes have all expected clients.
     """
+    if all_clients is None:
+        all_clients = {"geth", "reth", "nethermind", "besu", "erigon"}
     estimation_by_client = results_df.groupby("opcode")["client_name"].nunique()
-    all_clients = {"geth", "reth", "nethermind", "besu", "erigon"}
-    opcodes_with_missing_clients = estimation_by_client[estimation_by_client < 5].index
+    n_clients = len(all_clients)
+    opcodes_with_missing_clients = estimation_by_client[estimation_by_client < n_clients].index
     missing_clients_by_opcode = {}
     for opcode in opcodes_with_missing_clients:
         present_clients = set(

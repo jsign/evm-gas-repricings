@@ -151,6 +151,7 @@ def generate_repricings_report(
     target_operations: List[str],
     params_multipliers: Dict[str, float] = dict(),
     group_by: List[str] = ["client_name", "test_name"],
+    all_clients: set = None,
 ) -> None:
     # Start markdown report
     md_file = MdUtils(
@@ -331,7 +332,7 @@ in the "Errors and caveats" section.
     md_file.new_paragraph()
     # Add section on clients with missing estimations
     missing_clients_by_opcode = find_missing_client_estimations(
-        results_df, target_operations
+        results_df, target_operations, all_clients=all_clients
     )
     if len(missing_clients_by_opcode) == 0:
         md_file.new_paragraph("All operations have estimations for all clients.")

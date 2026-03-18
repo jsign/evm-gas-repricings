@@ -33,13 +33,12 @@ def create_and_save_new_gas_plot(new_gas_df: pd.DataFrame, out_dir: str) -> None
             offset = (idx - len(clients) / 2) * 0.15
             y_positions.append(base_pos + offset)
         # Plot points and error bars
+        xerr_low = (client_data["new_gas_rounded"] - client_data["new_gas_conf_int_low"]).clip(lower=0)
+        xerr_high = (client_data["new_gas_conf_int_high"] - client_data["new_gas_rounded"]).clip(lower=0)
         ax.errorbar(
             client_data["new_gas_rounded"],
             y_positions,
-            xerr=[
-                client_data["new_gas_rounded"] - client_data["new_gas_conf_int_low"],
-                client_data["new_gas_conf_int_high"] - client_data["new_gas_rounded"],
-            ],
+            xerr=[xerr_low, xerr_high],
             fmt="o",
             label=client,
             color=client_colors[client],
@@ -83,13 +82,12 @@ def create_and_save_state_access_gas_plot(params_df: pd.DataFrame, out_dir: str)
             base_pos = np.where(gas_params == gp)[0][0]
             offset = (idx - len(clients) / 2) * 0.15
             y_positions.append(base_pos + offset)
+        xerr_low = (client_data["new_gas_rounded"] - client_data["new_gas_conf_int_low"]).clip(lower=0)
+        xerr_high = (client_data["new_gas_conf_int_high"] - client_data["new_gas_rounded"]).clip(lower=0)
         ax.errorbar(
             client_data["new_gas_rounded"],
             y_positions,
-            xerr=[
-                client_data["new_gas_rounded"] - client_data["new_gas_conf_int_low"],
-                client_data["new_gas_conf_int_high"] - client_data["new_gas_rounded"],
-            ],
+            xerr=[xerr_low, xerr_high],
             fmt="o",
             label=client,
             color=client_colors[client],
@@ -198,7 +196,9 @@ def create_and_save_multidim_nnls_regression_plot(
     for i, feature in enumerate(features):
         ax = axes[i] if len(features) > 1 else axes
         unique_param_values = sorted(feature_df[feature].unique())
-        colors = matplotlib.color_sequences["Set2"][: len(unique_param_values)]
+        n_vals = len(unique_param_values)
+        cmap = matplotlib.colormaps["tab20"] if n_vals > 8 else matplotlib.colormaps["Set2"]
+        colors = [cmap(i / max(n_vals - 1, 1)) for i in range(n_vals)]
         for idx, param_val in enumerate(unique_param_values):
             subset = feature_df[feature_df[feature] == param_val]
             ax.scatter(
