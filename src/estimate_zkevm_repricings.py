@@ -47,7 +47,7 @@ if __name__ == "__main__":
     # Usage: .venv/bin/python src/estimate_zkevm_repricings.py [--anchor-rate 12.5e6]
     #
     # Prerequisites:
-    #   - Fixture JSON files in zkevm/fixtures/blockchain_tests/benchmark/compute/
+    #   - Fixture JSON files in zkevm/fixtures/blockchain_tests/for_osaka_at_*/compute/
     #     (contain opcode traces for each test — used to count target opcode executions)
     #   - Run result JSON files in zkevm/runs/<gas-limit>/<EL-client>/<prover>/
     #     (contain proving times per test per client/prover combination)
@@ -89,7 +89,7 @@ if __name__ == "__main__":
     # - Runs provide proving times (how long each test took per EL-client/prover pair)
     # - These are merged on test_title to get: timing + opcount per run
     fixture_root = os.path.join(
-        repo_dir, "zkevm", "fixtures", "blockchain_tests", "benchmark", "compute"
+        repo_dir, "zkevm", "fixtures", "blockchain_tests"
     )
     runs_root = os.path.join(repo_dir, "zkevm", "runs")
 
