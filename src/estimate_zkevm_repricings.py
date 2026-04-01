@@ -49,7 +49,7 @@ if __name__ == "__main__":
     # Prerequisites:
     #   - Fixture JSON files in zkevm/fixtures/blockchain_tests/for_osaka_at_*/compute/
     #     (contain opcode traces for each test — used to count target opcode executions)
-    #   - Run result JSON files in zkevm/runs/<gas-limit>/<EL-client>/<prover>/
+    #   - Run result JSON files in zkevm/runs/<EL-client>/<prover>/
     #     (contain proving times per test per client/prover combination)
     #
     # Output goes to reports/zkevm/<date>/ and includes:

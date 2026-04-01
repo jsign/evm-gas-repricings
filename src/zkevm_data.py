@@ -130,6 +130,27 @@ def _normalize_zkevm_param_names(prev_df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
+def _extract_fixture_opcode_count(test_data: dict) -> dict:
+    """Read opcode counts from the supported zkEVM fixture schemas."""
+    if not isinstance(test_data, dict):
+        return {}
+
+    info = test_data.get("_info", {})
+    if not isinstance(info, dict):
+        return {}
+
+    metadata = info.get("metadata", {})
+    if isinstance(metadata, dict):
+        opcode_count = metadata.get("opcode_count", {})
+        if isinstance(opcode_count, dict) and opcode_count:
+            return opcode_count
+
+    opcode_count = info.get("opcode_count", {})
+    if isinstance(opcode_count, dict):
+        return opcode_count
+    return {}
+
+
 def load_zkevm_fixtures(fixture_root: str) -> pd.DataFrame:
     """Load fixture traces into a canonicalized trace DataFrame."""
     rows = []
@@ -142,8 +163,7 @@ def load_zkevm_fixtures(fixture_root: str) -> pd.DataFrame:
         for test_key, test_data in data.items():
             if not isinstance(test_data, dict):
                 continue
-            info = test_data.get("_info", {})
-            opcode_count = info.get("opcode_count", {})
+            opcode_count = _extract_fixture_opcode_count(test_data)
             if not opcode_count:
                 continue
             short_name = _FIXTURE_PREFIX_RE.sub("", test_key)
@@ -153,59 +173,62 @@ def load_zkevm_fixtures(fixture_root: str) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
+def _infer_run_gas_limit(test_title: str) -> str:
+    """Infer the gas limit used by a run for crash summaries."""
+    try:
+        inferred = parse_zkevm_test_title(test_title)["block_limit_million"]
+    except (AttributeError, IndexError, KeyError):
+        inferred = None
+    return inferred or "unknown"
+
+
 def load_zkevm_runs(runs_root: str) -> Tuple[pd.DataFrame, pd.DataFrame]:
-    """Auto-detect and load successful and crashed zkEVM run JSONs."""
+    """Load successful and crashed zkEVM run JSONs from the flat run layout."""
     rows = []
     crash_rows = []
     runs_path = Path(runs_root)
 
-    for gas_dir in sorted(runs_path.iterdir()):
-        if not gas_dir.is_dir():
+    for client_dir in sorted(runs_path.iterdir()):
+        if not client_dir.is_dir():
             continue
-        gas_match = re.match(r"(\d+)M-gas-limit", gas_dir.name)
-        if not gas_match:
-            continue
+        client = client_dir.name
 
-        for client_dir in sorted(gas_dir.iterdir()):
-            if not client_dir.is_dir():
+        for prover_dir in sorted(client_dir.iterdir()):
+            if not prover_dir.is_dir():
                 continue
-            client = client_dir.name
+            prover = prover_dir.name
+            client_name = f"{client}{_CLIENT_NAME_SEPARATOR}{prover}"
 
-            for prover_dir in sorted(client_dir.iterdir()):
-                if not prover_dir.is_dir():
+            for json_file in sorted(prover_dir.glob("*.json")):
+                try:
+                    with open(json_file) as f:
+                        data = json.load(f)
+                except (json.JSONDecodeError, UnicodeDecodeError):
                     continue
-                prover = prover_dir.name
-                client_name = f"{client}{_CLIENT_NAME_SEPARATOR}{prover}"
 
-                for json_file in sorted(prover_dir.glob("*.json")):
-                    try:
-                        with open(json_file) as f:
-                            data = json.load(f)
-                    except (json.JSONDecodeError, UnicodeDecodeError):
-                        continue
-
-                    proving = data.get("proving", {})
-                    if "crashed" in proving:
-                        crash_rows.append(
-                            {
-                                "client_name": client_name,
-                                "gas_limit": gas_match.group(1),
-                                "test_name": data.get("name", json_file.stem),
-                                "reason": proving["crashed"].get("reason", "unknown"),
-                            }
-                        )
-                        continue
-                    if "success" not in proving:
-                        continue
-
-                    rows.append(
+                proving = data.get("proving", {})
+                test_title = data.get("name", json_file.stem)
+                if "crashed" in proving:
+                    crash_rows.append(
                         {
-                            "test_title": data["name"],
                             "client_name": client_name,
-                            "run_duration_ms": proving["success"]["proving_time_ms"],
-                            "ingestion_timestamp": data.get("timestamp_completed"),
+                            "gas_limit": _infer_run_gas_limit(test_title),
+                            "test_name": test_title,
+                            "reason": proving["crashed"].get("reason", "unknown"),
                         }
                     )
+                    continue
+                if "success" not in proving:
+                    continue
+
+                rows.append(
+                    {
+                        "test_title": test_title,
+                        "client_name": client_name,
+                        "run_duration_ms": proving["success"]["proving_time_ms"],
+                        "ingestion_timestamp": data.get("timestamp_completed"),
+                    }
+                )
 
     runs_df = pd.DataFrame(rows)
     crash_df = pd.DataFrame(crash_rows)
@@ -229,6 +252,12 @@ def process_zkevm_data(
     """Load canonicalized zkEVM fixtures and runs into pipeline-shaped frames."""
     print("Loading zkEVM fixtures...")
     trace_df = load_zkevm_fixtures(fixture_root)
+    if trace_df.empty:
+        raise ValueError(
+            "No usable zkEVM fixture traces were loaded. "
+            "Expected opcode counts under _info.metadata.opcode_count "
+            f"or legacy _info.opcode_count in fixture JSONs under {fixture_root}."
+        )
     trace_df = process_compute_params(trace_df)
     trace_df = _normalize_trace_opcode_columns(trace_df)
     trace_df = _normalize_zkevm_param_names(trace_df)
@@ -237,6 +266,12 @@ def process_zkevm_data(
 
     print("Loading zkEVM runs...")
     runs_df, crash_df = load_zkevm_runs(runs_root)
+    if runs_df.empty:
+        raise ValueError(
+            "No usable zkEVM run results were loaded. "
+            "Expected JSON runs in "
+            f"{runs_root}/<client>/<prover>/ with proving.success or proving.crashed data."
+        )
     print(f"  Loaded {len(runs_df)} successful runs ({len(crash_df)} crashed)")
 
     parsed_df = pd.DataFrame(runs_df["test_title"].apply(parse_zkevm_test_title).tolist())
